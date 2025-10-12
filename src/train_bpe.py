@@ -3,6 +3,7 @@ import time
 from multiprocessing.pool import Pool
 import regex as re
 from cs336_basics.pretokenization_example import find_chunk_boundaries
+from tests.common import FIXTURES_PATH
 
 def train_bpe(
     input_path: str | os.PathLike,
@@ -24,32 +25,71 @@ def train_bpe(
 
     start_time = time.time()
     ## Usage
+    boundaries = []
     with open(input_path, "rb") as f:
-        num_processes = 4
+        num_processes = 200
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
-    
-        items = []
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            #items.append((f, start, end, special_tokens))
-            items.append((input_path, start, end, special_tokens))
 
-        with Pool() as pool:
-
-            multiple_results = []
-            for item in items:
-                result = pool.apply_async(read_file_in_chunks, item)
+        multiple_results = []
+        process_id = 1
+        with Pool(processes=10) as pool:
+            for start, end in zip(boundaries[:-1], boundaries[1:]):
+                chunks_of_pretokenized_dict = []
+                f.seek(start)
+                chunk = f.read(end - start).decode("utf-8", errors="ignore")
+                
+                
+                print(f"Scheduling chunk from {start} to {end} with process_id {process_id}...")
+                #items.append((f, start, end, special_tokens))
+                #items.append((input_path, process_id, start, end, special_tokens))
+                
+                result = pool.apply_async(read_file_in_chunks, (chunk, process_id, special_tokens))#(input_path, process_id, start, end, special_tokens))
                 multiple_results.append(result)
-            
-            for result in multiple_results:
-                chunks_of_pretokenized_dict += result.get()
+
+                process_id += 1
+
+                if len(multiple_results) >= 10:
+                    for result in multiple_results:
+                        #print("Getting result...")
+                        get_result = result.get()
+                        print(f"Got result of length {len(get_result)}.")
+                        chunks_of_pretokenized_dict += get_result
+
+                    multiple_results = []
+                    process_id = 1
+
+                """ if len(multiple_results) >= 10:
+                    process_id = 1
+
+                    
+
+                    multiple_results = []
+
+                    print(f"Processed 10% chunks so far...") """
+    
+    #items = []
+    
+        
+
+
+
+    
+
+        """ multiple_results = []
+        for item in items:
+            result = pool.apply_async(read_file_in_chunks, item)
+            multiple_results.append(result)
+        
+        for result in multiple_results:
+            chunks_of_pretokenized_dict += result.get() """
 
     end_time = time.time()
     print(f"Time to read and pretokenize: {end_time - start_time} seconds")
 
-    start_time = time.time()
+    """ start_time = time.time()
 
     for pretokenized_dict in chunks_of_pretokenized_dict:
         paired_tokens = build_token_pairs(pretokenized_dict, paired_tokens)
@@ -72,30 +112,39 @@ def train_bpe(
             merge_tokens(merged_tokens, most_frequent_pair, paired_tokens)
 
     end_time = time.time()
-    print(f"Time to build BPE merges: {end_time - start_time} seconds")
+    print(f"Time to build BPE merges: {end_time - start_time} seconds") """
 
     return (vocabulary, merges)
 
 def read_file_in_chunks(
+    chunk: str,
     #f: BinaryIO,
-    input_path: str | os.PathLike,
-    start: int,
-    end: int,
+    #input_path: str | os.PathLike,
+    process_id: int,
+    #start: int,
+    #end: int,
     special_tokens: list[str],
 ) -> list[dict[tuple[bytes], int]]:
-    with open(input_path, "rb") as f:
-        chunks_of_pretokenized_dict = []
+    i = 0
+    chunks_of_pretokenized_dict = []
+    """ with open(input_path, "rb") as f:
+        
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore")
-        # Run pre-tokenization on your chunk and store the counts for each pre-token
+ """        # Run pre-tokenization on your chunk and store the counts for each pre-token
         
-        for content in re.split("|".join([re.escape(st) for st in special_tokens]), chunk):
-            if content.strip() == "":
-                continue
+    for content in re.split("|".join([re.escape(st) for st in special_tokens]), chunk):
+        if content.strip() == "":
+            continue
 
-            pretokenized_dict = build_pretokenized_dict(content)
-            chunks_of_pretokenized_dict.append(pretokenized_dict)
+        """ if i > 0 and i % 10000 == 0:
+            print(f"With process_id {process_id}, processed {i} chunks...") """
 
+        pretokenized_dict = build_pretokenized_dict(content)
+        chunks_of_pretokenized_dict.append(pretokenized_dict)
+        i += 1
+
+    print(f"Scheduled chunk with process_id {process_id} finished with length {len(chunks_of_pretokenized_dict)}.")
     return chunks_of_pretokenized_dict
 
 def build_pretokenized_dict(
@@ -206,3 +255,9 @@ def merge_tokens(
 
     for new_token_tuple, count in new_merged_tokens.items():
         byte_pair_frequency[new_token_tuple] = count
+
+train_bpe(
+    input_path=FIXTURES_PATH / "data/TinyStoriesV2-GPT4-train.txt",
+    vocab_size=10000,
+    special_tokens=["<|endoftext|>"],
+)
