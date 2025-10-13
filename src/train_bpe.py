@@ -1,6 +1,7 @@
 import os
 import time
 from multiprocessing.pool import Pool
+import concurrent.futures
 import regex as re
 from cs336_basics.pretokenization_example import find_chunk_boundaries
 from tests.common import FIXTURES_PATH
@@ -25,51 +26,79 @@ def train_bpe(
 
     start_time = time.time()
     ## Usage
-    boundaries = []
+    """ boundaries = []
     with open(input_path, "rb") as f:
-        num_processes = 200
-        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+        num_chunks = 500
+        boundaries = find_chunk_boundaries(f, num_chunks, b"<|endoftext|>") """
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
 
+    #multiple_results = []
+    #process_id = 1
+    try:
+        num_processes = 4
+        with concurrent.futures.ProcessPoolExecutor(num_processes) as executor:
+            futures = [executor.submit(read_file_in_chunks, str) for str in read_chunks(input_path)]
+            for future in concurrent.futures.as_completed(futures):
+                res = future.result()
+                print(f"Got result of length {len(res)}.")
+                chunks_of_pretokenized_dict += res
+        """ with Pool(processes=num_processes) as pool:
+            #chunks = []
+            for result in pool.map(read_file_in_chunks, read_chunks(input_path), chunksize=1):
+                # result is ready as soon as processed
+                print(f"Got result of length {len(result)}.")
+                #chunks_of_pretokenized_dict += result """
+        print(f"Finished processing all chunks with {num_processes} processes.")
+    except Exception as e:
+        print(f"Main process error: {e}")
+    """ for start, end in zip(boundaries[:-1], boundaries[1:]):
+        chunks_of_pretokenized_dict = []
+        f.seek(start)
+        chunk = f.read(end - start).decode("utf-8", errors="ignore")
+        print(f"Reading chunk from {start} to {end}...") """
+
+
+    #chunks.append(chunk)
+            #print(f"Scheduling chunk from {start} to {end} with process_id {process_id}...")
+            #items.append((f, start, end, special_tokens))
+            #items.append((input_path, process_id, start, end, special_tokens))
+
+    """ result = pool.starmap_async(read_file_in_chunks, [(chunk,special_tokens) for chunk in chunks], chunksize=16)
+    results = result.get()
+    for r in results:
+        chunks_of_pretokenized_dict += r """
+        
+    """ result = pool.apply_async(read_file_in_chunks, (chunk, process_id, special_tokens))#(input_path, process_id, start, end, special_tokens))
+    multiple_results.append(result)
+
+    process_id += 1 """
+
+    """ if len(multiple_results) >= 2 * num_processes:
+        for result in multiple_results:
+            #print("Getting result...")
+            get_result = result.get()
+            print(f"Got result of length {len(get_result)}.")
+            chunks_of_pretokenized_dict += get_result
+
         multiple_results = []
+        process_id = 1 """
+
+    """ if len(multiple_results) >= 10:
         process_id = 1
-        with Pool(processes=10) as pool:
-            for start, end in zip(boundaries[:-1], boundaries[1:]):
-                chunks_of_pretokenized_dict = []
-                f.seek(start)
-                chunk = f.read(end - start).decode("utf-8", errors="ignore")
-                
-                
-                print(f"Scheduling chunk from {start} to {end} with process_id {process_id}...")
-                #items.append((f, start, end, special_tokens))
-                #items.append((input_path, process_id, start, end, special_tokens))
-                
-                result = pool.apply_async(read_file_in_chunks, (chunk, process_id, special_tokens))#(input_path, process_id, start, end, special_tokens))
-                multiple_results.append(result)
 
-                process_id += 1
+        
 
-                if len(multiple_results) >= 10:
-                    for result in multiple_results:
-                        #print("Getting result...")
-                        get_result = result.get()
-                        print(f"Got result of length {len(get_result)}.")
-                        chunks_of_pretokenized_dict += get_result
+        multiple_results = []
 
-                    multiple_results = []
-                    process_id = 1
+        print(f"Processed 10% chunks so far...") """
+    """ for result in multiple_results:
+        #print("Getting result...")
+        get_result = result.get()
+        print(f"Got result of length {len(get_result)}.")
+        chunks_of_pretokenized_dict += get_result """
 
-                """ if len(multiple_results) >= 10:
-                    process_id = 1
-
-                    
-
-                    multiple_results = []
-
-                    print(f"Processed 10% chunks so far...") """
-    
     #items = []
     
         
@@ -78,13 +107,13 @@ def train_bpe(
 
     
 
-        """ multiple_results = []
-        for item in items:
-            result = pool.apply_async(read_file_in_chunks, item)
-            multiple_results.append(result)
-        
-        for result in multiple_results:
-            chunks_of_pretokenized_dict += result.get() """
+    """ multiple_results = []
+    for item in items:
+        result = pool.apply_async(read_file_in_chunks, item)
+        multiple_results.append(result)
+    
+    for result in multiple_results:
+        chunks_of_pretokenized_dict += result.get() """
 
     end_time = time.time()
     print(f"Time to read and pretokenize: {end_time - start_time} seconds")
@@ -116,36 +145,53 @@ def train_bpe(
 
     return (vocabulary, merges)
 
+def read_chunks(input_path):
+    with open(input_path, "rb") as f:
+        num_chunks = 160
+        boundaries = find_chunk_boundaries(f, num_chunks, b"<|endoftext|>")
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            if end > 176938507:
+                continue
+            f.seek(start)
+            chunk = f.read(end - start).decode("utf-8", errors="ignore")
+            print(f"Reading chunk from {start} to {end}...")
+            yield chunk
+
 def read_file_in_chunks(
     chunk: str,
     #f: BinaryIO,
     #input_path: str | os.PathLike,
-    process_id: int,
+    #process_id: int,
     #start: int,
     #end: int,
-    special_tokens: list[str],
+    #special_tokens: list[str],
 ) -> list[dict[tuple[bytes], int]]:
-    i = 0
-    chunks_of_pretokenized_dict = []
-    """ with open(input_path, "rb") as f:
-        
-        f.seek(start)
-        chunk = f.read(end - start).decode("utf-8", errors="ignore")
- """        # Run pre-tokenization on your chunk and store the counts for each pre-token
-        
-    for content in re.split("|".join([re.escape(st) for st in special_tokens]), chunk):
-        if content.strip() == "":
-            continue
+    try:
+        print(f"Scheduled chunk begin")
+        special_tokens = ["<|endoftext|>"]
+        i = 0
+        chunks_of_pretokenized_dict = []
+        """ with open(input_path, "rb") as f:
+            
+            f.seek(start)
+            chunk = f.read(end - start).decode("utf-8", errors="ignore")
+    """        # Run pre-tokenization on your chunk and store the counts for each pre-token
+            
+        for content in re.split("|".join([re.escape(st) for st in special_tokens]), chunk):
+            if content.strip() == "":
+                continue
+            """ if i > 0 and i % 10000 == 0:
+                print(f"With process_id {process_id}, processed {i} chunks...") """
 
-        """ if i > 0 and i % 10000 == 0:
-            print(f"With process_id {process_id}, processed {i} chunks...") """
+            pretokenized_dict = build_pretokenized_dict(content)
+            chunks_of_pretokenized_dict.append(pretokenized_dict)
+            i += 1
 
-        pretokenized_dict = build_pretokenized_dict(content)
-        chunks_of_pretokenized_dict.append(pretokenized_dict)
-        i += 1
-
-    print(f"Scheduled chunk with process_id {process_id} finished with length {len(chunks_of_pretokenized_dict)}.")
-    return chunks_of_pretokenized_dict
+        print(f"Scheduled chunk with process_id finished with length {len(chunks_of_pretokenized_dict)}.")
+        return chunks_of_pretokenized_dict
+    except Exception as e:
+        # You can log or return an error marker instead of crashing the worker
+        return f"Custom Error: {e}"
 
 def build_pretokenized_dict(
     content: str
@@ -256,8 +302,9 @@ def merge_tokens(
     for new_token_tuple, count in new_merged_tokens.items():
         byte_pair_frequency[new_token_tuple] = count
 
-train_bpe(
-    input_path=FIXTURES_PATH / "data/TinyStoriesV2-GPT4-train.txt",
-    vocab_size=10000,
-    special_tokens=["<|endoftext|>"],
-)
+if __name__ == "__main__":
+    train_bpe(
+        input_path=FIXTURES_PATH / "data/TinyStoriesV2-GPT4-train.txt",
+        vocab_size=10000,
+        special_tokens=["<|endoftext|>"],
+    )
