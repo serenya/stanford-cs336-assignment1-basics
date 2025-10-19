@@ -11,14 +11,14 @@ class Linear(nn.Module):
         dtype: torch.dtype | None = None
     ):
         super(Linear, self).__init__()
-        self.weight = nn.Parameter(torch.empty(out_features, in_features)) #
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
     
     def forward(
         self,
         x: torch.Tensor
     ) -> torch.Tensor:
         # Apply the linear transformation
-        return x @ self.weight.T.t()
+        return x @ self.weight.T
 
 # Example usage
 if __name__ == "__main__":
