@@ -69,7 +69,7 @@ def pretokenize(
 
     print(f"Time to read and pretokenize: {end_time - start_time} seconds")
 
-    return { tuple(map(int.to_bytes, key.encode("utf-8"))):value for key, value in pretokenized_counter.items() }
+    return { tuple(bytes([b]) for b in key.encode("utf-8")):value for key, value in pretokenized_counter.items() }
 
 def read_file_in_chunks(
     input_path: str | os.PathLike,
