@@ -13,6 +13,7 @@ from src.Linear import Linear
 from src.Embedding import Embedding
 from src.RMSNorm import RMSNorm
 from src.SwiGLU import SwiGLU
+from src.RotaryPositionalEmbedding import RotaryPositionalEmbedding
 
 def run_linear(
     d_in: int,
@@ -208,12 +209,13 @@ def run_rope(
         d_k (int): Embedding dimension size for the query or key tensor.
         theta (float): RoPE parameter.
         max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        in_query_or_key (Float[Tensor, "... sequence_length d_k"]): Input tensor to run RoPE on.
+        in_query_or_key (Float[Tenso r, "... sequence_length d_k"]): Input tensor to run RoPE on.
         token_positions (Int[Tensor, "... sequence_length"]): Tensor of shape (batch_size, sequence_length) with the token positions
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    rotaryPositionalEmbedding = RotaryPositionalEmbedding(theta, d_k, max_seq_len)
+    return rotaryPositionalEmbedding.forward(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
